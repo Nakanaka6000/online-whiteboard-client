@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('whiteboard');
     const ctx = canvas.getContext('2d');
     const toolbar = document.getElementById('toolbar');
-    const statusDiv = document.getElementById('status');
+    const statusLight = document.getElementById('status-light');
 
     // Canvas setup
     canvas.width = window.innerWidth;
@@ -134,13 +134,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Socket.IO Listeners ---
     socket.on('connect', () => {
-        statusDiv.textContent = '✅ 接続完了';
-        statusDiv.style.backgroundColor = '#28a745';
+        statusLight.className = 'connected';
+        statusLight.title = '✅ 接続完了';
     });
 
     socket.on('disconnect', () => {
-        statusDiv.textContent = '❌ 接続が切れました';
-        statusDiv.style.backgroundColor = '#dc3545';
+        statusLight.className = 'disconnected';
+        statusLight.title = '❌ 接続が切れました';
     });
 
     socket.on('drawing', (data) => {

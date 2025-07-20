@@ -34,13 +34,23 @@ canvas {
     background: #fff;
 }
 
-#status {
+#status-light {
     position: absolute;
-    bottom: 10px;
-    right: 10px;
-    padding: 5px 10px;
-    background: #333;
-    color: white;
-    border-radius: 5px;
-    font-size: 14px;
+    bottom: 15px;
+    right: 15px;
+    width: 15px;
+    height: 15px;
+    background-color: #808080; /* Default: Gray */
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    transition: background-color 0.3s ease;
+}
+
+#status-light.connected {
+    background-color: #28a745; /* Green */
+}
+
+#status-light.disconnected {
+    background-color: #dc3545; /* Red */
 }
