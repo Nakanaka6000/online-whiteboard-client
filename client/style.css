@@ -1,9 +1,46 @@
-
 body {
-  margin: 0;
-  overflow: hidden;
+    margin: 0;
+    overflow: hidden;
+    font-family: sans-serif;
+}
+
+#toolbar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+
+.tool, #clear-btn {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.tool.active {
+    background: #a0c4ff;
+    font-weight: bold;
 }
 
 canvas {
-  display: block;
+    display: block;
+    background: #fff;
+}
+
+#status {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    background: #333;
+    color: white;
+    border-radius: 5px;
+    font-size: 14px;
 }

@@ -1,15 +1,21 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Online Whiteboard</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>オンラインホワイトボード</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="whiteboard"></canvas>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="script.js"></script>
+    <div id="toolbar">
+        <button id="pen-btn" class="tool active">ペン</button>
+        <button id="eraser-btn" class="tool">消しゴム</button>
+        <button id="clear-btn">全消去</button>
+    </div>
+    <canvas id="whiteboard"></canvas>
+    <div id="status">接続待機中...</div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
