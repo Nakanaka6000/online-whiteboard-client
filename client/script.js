@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageUploadBtn = document.getElementById('image-upload-btn');
     const imageInput = document.getElementById('image-input');
 
+    let drawnElements = []; // Stores all drawn lines and images
+    let currentPath = []; // Stores points for the current drawing path
+
     // Canvas setup
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -16,11 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let state = {
         isDrawing: false,
+        isDraggingImage: false,
+        selectedImageId: null,
+        dragOffsetX: 0,
+        dragOffsetY: 0,
         lastX: 0,
         lastY: 0,
         strokeColor: 'black',
         strokeWidth: 5,
-        tool: 'pen' // 'pen' or 'eraser'
+        tool: 'pen' // 'pen', 'eraser', or 'select' for image manipulation
     };
 
     // --- Tool selection ---
@@ -53,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (event) => {
             const img = new Image();
             img.onload = () => {
-                // Initial draw: center the image, scale down if too large
                 const maxWidth = canvas.width * 0.8;
                 const maxHeight = canvas.height * 0.8;
                 let width = img.width;
@@ -68,15 +74,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const x = (canvas.width - width) / 2;
                 const y = (canvas.height - height) / 2;
 
-                ctx.drawImage(img, x, y, width, height);
-
-                // Emit image data to other clients
-                socket.emit('image', {
+                const newImage = {
+                    id: Date.now(), // Unique ID for the image
+                    type: 'image',
                     dataURL: event.target.result,
                     x: x,
                     y: y,
                     width: width,
-                    height: height
+                    height: height,
+                    img: img // Store the Image object directly
+                };
+                drawnElements.push(newImage);
+                redrawAllElements();
+
+                // Emit image data to other clients
+                socket.emit('image', {
+                    id: newImage.id,
+                    dataURL: newImage.dataURL,
+                    x: newImage.x,
+                    y: newImage.y,
+                    width: newImage.width,
+                    height: newImage.height
                 });
             };
             img.src = event.target.result;
@@ -100,48 +118,91 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDrawing = (e) => {
         e.preventDefault();
         const { x, y } = getMousePos(e);
+
+        if (state.tool === 'select') {
+            // Check if an image is clicked
+            for (let i = drawnElements.length - 1; i >= 0; i--) {
+                const el = drawnElements[i];
+                if (el.type === 'image' && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height) {
+                    state.isDraggingImage = true;
+                    state.selectedImageId = el.id;
+                    state.dragOffsetX = x - el.x;
+                    state.dragOffsetY = y - el.y;
+                    return;
+                }
+            }
+            state.selectedImageId = null; // Deselect if no image clicked
+        }
+
         state.isDrawing = true;
         state.lastX = x;
         state.lastY = y;
 
-        const drawData = {
-            type: 'start',
-            x: x,
-            y: y,
-            tool: state.tool,
-            strokeColor: state.strokeColor,
-            strokeWidth: state.tool === 'eraser' ? 20 : 5
-        };
-        socket.emit('drawing', drawData);
-        drawOnCanvas(drawData);
+        if (state.tool !== 'select') {
+            const drawData = {
+                type: 'start',
+                x: x,
+                y: y,
+                tool: state.tool,
+                strokeColor: state.strokeColor,
+                strokeWidth: state.tool === 'eraser' ? 20 : 5
+            };
+            currentPath = [drawData];
+            socket.emit('drawing', drawData);
+            drawOnCanvas(drawData);
+        }
     };
 
     const draw = (e) => {
-        if (!state.isDrawing) return;
+        if (!state.isDrawing && !state.isDraggingImage) return;
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
-        const drawData = {
-            type: 'draw',
-            x: x,
-            y: y,
-            lastX: state.lastX,
-            lastY: state.lastY,
-            tool: state.tool,
-            strokeColor: state.strokeColor,
-            strokeWidth: state.tool === 'eraser' ? 20 : 5
-        };
-        socket.emit('drawing', drawData);
-        drawOnCanvas(drawData);
+        if (state.isDraggingImage && state.selectedImageId !== null) {
+            const imageToMove = drawnElements.find(el => el.id === state.selectedImageId);
+            if (imageToMove) {
+                imageToMove.x = x - state.dragOffsetX;
+                imageToMove.y = y - state.dragOffsetY;
+                redrawAllElements();
+                socket.emit('imageUpdate', { id: imageToMove.id, x: imageToMove.x, y: imageToMove.y });
+            }
+            return;
+        }
 
-        state.lastX = x;
-        state.lastY = y;
+        if (!state.isDrawing) return; // Should not happen if isDrawing is true
+
+        if (state.tool !== 'select') {
+            const drawData = {
+                type: 'draw',
+                x: x,
+                y: y,
+                lastX: state.lastX,
+                lastY: state.lastY,
+                tool: state.tool,
+                strokeColor: state.strokeColor,
+                strokeWidth: state.tool === 'eraser' ? 20 : 5
+            };
+            currentPath.push(drawData);
+            socket.emit('drawing', drawData);
+            drawOnCanvas(drawData);
+
+            state.lastX = x;
+            state.lastY = y;
+        }
     };
 
     const stopDrawing = () => {
-        if (!state.isDrawing) return;
+        if (state.isDrawing && state.tool !== 'select') {
+            const drawData = { type: 'stop' };
+            currentPath.push(drawData);
+            drawnElements.push({ type: 'path', path: currentPath, strokeColor: state.strokeColor, strokeWidth: state.tool === 'eraser' ? 20 : 5 });
+            socket.emit('drawing', drawData);
+            drawOnCanvas(drawData);
+        }
         state.isDrawing = false;
-        socket.emit('drawing', { type: 'stop' });
+        state.isDraggingImage = false;
+        state.selectedImageId = null;
+        currentPath = [];
     };
 
     // --- Canvas drawing function ---
@@ -165,6 +226,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const redrawAllElements = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawnElements.forEach(el => {
+            if (el.type === 'path') {
+                ctx.strokeStyle = el.strokeColor;
+                ctx.lineWidth = el.strokeWidth;
+                ctx.beginPath();
+                el.path.forEach((point, index) => {
+                    if (point.type === 'start') {
+                        ctx.moveTo(point.x, point.y);
+                    } else if (point.type === 'draw') {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                });
+                ctx.stroke();
+            } else if (el.type === 'image') {
+                ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
+            }
+        });
+    };
+
     // --- Event Listeners ---
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
@@ -176,12 +258,9 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.addEventListener('touchend', stopDrawing);
 
     window.addEventListener('resize', () => {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        ctx.putImageData(imageData, 0, 0);
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
+        redrawAllElements(); // Redraw all elements on resize
     });
 
     // --- Socket.IO Listeners ---
@@ -196,18 +275,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('drawing', (data) => {
-        drawOnCanvas(data);
+        // Reconstruct path for remote drawing
+        if (data.type === 'start') {
+            currentPath = [data];
+        } else if (data.type === 'draw') {
+            currentPath.push(data);
+        } else if (data.type === 'stop') {
+            drawnElements.push({ type: 'path', path: currentPath, strokeColor: data.strokeColor, strokeWidth: data.strokeWidth });
+            currentPath = [];
+        }
+        redrawAllElements();
     });
 
     socket.on('clear', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawnElements = []; // Clear all elements
     });
 
     socket.on('image', (imageData) => {
         const img = new Image();
         img.onload = () => {
-            ctx.drawImage(img, imageData.x, imageData.y, imageData.width, imageData.height);
+            const newImage = {
+                id: imageData.id,
+                type: 'image',
+                dataURL: imageData.dataURL,
+                x: imageData.x,
+                y: imageData.y,
+                width: imageData.width,
+                height: imageData.height,
+                img: img
+            };
+            drawnElements.push(newImage);
+            redrawAllElements();
         };
         img.src = imageData.dataURL;
+    });
+
+    socket.on('imageUpdate', (updateData) => {
+        const imageToUpdate = drawnElements.find(el => el.id === updateData.id);
+        if (imageToUpdate) {
+            imageToUpdate.x = updateData.x;
+            imageToUpdate.y = updateData.y;
+            redrawAllElements();
+        }
     });
 });
