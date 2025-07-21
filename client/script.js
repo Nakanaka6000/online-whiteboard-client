@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusLight = document.getElementById('status-light');
     const imageUploadBtn = document.getElementById('image-upload-btn');
     const imageInput = document.getElementById('image-input');
+    const textBtn = document.getElementById('text-btn');
 
     let drawnElements = []; // Stores all drawn lines and images
     let currentPath = []; // Stores points for the current drawing path
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedImageId: null,
         dragOffsetX: 0,
         dragOffsetY: 0,
+        isTyping: false,
         lastX: 0,
         lastY: 0,
         strokeColor: 'black',
@@ -45,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('tool')) {
             document.querySelector('.tool.active').classList.remove('active');
             e.target.classList.add('active');
-            state.tool = e.target.id === 'pen-btn' ? 'pen' : (e.target.id === 'eraser-btn' ? 'eraser' : 'select');
+            state.tool = e.target.id === 'pen-btn' ? 'pen' : (e.target.id === 'eraser-btn' ? 'eraser' : (e.target.id === 'text-btn' ? 'text' : 'select'));
         }
         if (e.target.classList.contains('color-btn')) {
             document.querySelector('.color-btn.active').classList.remove('active');
@@ -121,48 +123,59 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
-        if (state.tool === 'select') {
-            // Check if a resize handle is clicked
-            if (state.selectedImageId) {
-                const selectedImage = drawnElements.find(el => el.id === state.selectedImageId);
-                if (selectedImage) {
-                    const handleSize = 10;
-                    const handles = {
-                        tl: { x: selectedImage.x, y: selectedImage.y },
-                        tr: { x: selectedImage.x + selectedImage.width, y: selectedImage.y },
-                        bl: { x: selectedImage.x, y: selectedImage.y + selectedImage.height },
-                        br: { x: selectedImage.x + selectedImage.width, y: selectedImage.y + selectedImage.height }
+        if (state.tool === 'text') {
+            state.isTyping = true;
+            const inputX = x;
+            const inputY = y;
+
+            const textArea = document.createElement('textarea');
+            textArea.style.position = 'absolute';
+            textArea.style.left = `${inputX}px`;
+            textArea.style.top = `${inputY}px`;
+            textArea.style.fontSize = '16px'; // Default small size
+            textArea.style.fontFamily = 'sans-serif';
+            textArea.style.border = '1px solid #ccc';
+            textArea.style.padding = '5px';
+            textArea.style.background = 'rgba(255,255,255,0.9)';
+            textArea.style.zIndex = '100';
+            textArea.style.resize = 'none';
+            textArea.style.overflow = 'hidden';
+            textArea.rows = 1;
+            document.body.appendChild(textArea);
+            textArea.focus();
+
+            textArea.addEventListener('input', () => {
+                textArea.style.height = 'auto';
+                textArea.style.height = (textArea.scrollHeight) + 'px';
+            });
+
+            textArea.addEventListener('blur', () => {
+                if (textArea.value.trim() !== '') {
+                    const newText = {
+                        id: Date.now(),
+                        type: 'text',
+                        text: textArea.value,
+                        x: inputX,
+                        y: inputY,
+                        fontSize: '16px',
+                        fontFamily: 'sans-serif',
+                        color: state.strokeColor // Use current stroke color for text
                     };
-
-                    for (const handle in handles) {
-                        const hx = handles[handle].x;
-                        const hy = handles[handle].y;
-                        if (x >= hx - handleSize / 2 && x <= hx + handleSize / 2 &&
-                            y >= hy - handleSize / 2 && y <= hy + handleSize / 2) {
-                            state.isResizing = true;
-                            state.resizeHandle = handle;
-                            state.lastX = x;
-                            state.lastY = y;
-                            return;
-                        }
-                    }
+                    drawnElements.push(newText);
+                    redrawAllElements();
+                    socket.emit('text', newText);
                 }
-            }
+                document.body.removeChild(textArea);
+                state.isTyping = false;
+            });
 
-            // Check if an image is clicked (for dragging)
-            for (let i = drawnElements.length - 1; i >= 0; i--) {
-                const el = drawnElements[i];
-                if (el.type === 'image' && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height) {
-                    state.isDraggingImage = true;
-                    state.selectedImageId = el.id;
-                    state.dragOffsetX = x - el.x;
-                    state.dragOffsetY = y - el.y;
-                    redrawAllElements(); // Redraw to show handles
-                    return;
+            textArea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    textArea.blur();
                 }
-            }
-            state.selectedImageId = null; // Deselect if no image clicked
-            redrawAllElements(); // Redraw to hide handles
+            });
+            return;
         }
 
         state.isDrawing = true;
@@ -185,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const draw = (e) => {
-        if (!state.isDrawing && !state.isDraggingImage && !state.isResizing) return;
+        if (!state.isDrawing && !state.isDraggingImage && !state.isResizing || state.isTyping) return;
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
@@ -337,6 +350,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     ctx.fillRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
                     ctx.strokeRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
                 }
+            } else if (el.type === 'text') {
+                ctx.font = `${el.fontSize} ${el.fontFamily}`;
+                ctx.fillStyle = el.color;
+                // Split text into lines and draw each line
+                const lines = el.text.split('\n');
+                let currentY = el.y;
+                for (const line of lines) {
+                    ctx.fillText(line, el.x, currentY);
+                    currentY += parseInt(el.fontSize) * 1.2; // Line height
+                }
             }
         });
     };
@@ -384,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('clear', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawnElements = []; // Clear all elements
+        redrawAllElements(); // Ensure canvas is truly clear and elements array is empty
     });
 
     socket.on('image', (imageData) => {
@@ -414,5 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (updateData.height !== undefined) imageToUpdate.height = updateData.height;
             redrawAllElements();
         }
+    });
+
+    socket.on('text', (textData) => {
+        drawnElements.push(textData);
+        redrawAllElements();
     });
 });
