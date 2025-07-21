@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.classList.contains('tool')) {
             document.querySelector('.tool.active').classList.remove('active');
             e.target.classList.add('active');
-            state.tool = e.target.id === 'pen-btn' ? 'pen' : 'eraser';
+            state.tool = e.target.id === 'pen-btn' ? 'pen' : (e.target.id === 'eraser-btn' ? 'eraser' : 'select');
         }
         if (e.target.classList.contains('color-btn')) {
             document.querySelector('.color-btn.active').classList.remove('active');
