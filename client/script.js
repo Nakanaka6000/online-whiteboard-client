@@ -123,6 +123,69 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
+        if (state.tool === 'select') {
+            // Check if a resize handle is clicked
+            if (state.selectedElementId) {
+                const selectedElement = drawnElements.find(el => el.id === state.selectedElementId);
+                if (selectedElement && selectedElement.type === 'image') {
+                    const handleSize = 10;
+                    const handles = {
+                        tl: { x: selectedElement.x, y: selectedElement.y },
+                        tr: { x: selectedElement.x + selectedElement.width, y: selectedElement.y },
+                        bl: { x: selectedElement.x, y: selectedElement.y + selectedElement.height },
+                        br: { x: selectedElement.x + selectedElement.width, y: selectedElement.y + selectedElement.height }
+                    };
+
+                    for (const handle in handles) {
+                        const hx = handles[handle].x;
+                        const hy = handles[handle].y;
+                        if (x >= hx - handleSize / 2 && x <= hx + handleSize / 2 &&
+                            y >= hy - handleSize / 2 && y <= hy + handleSize / 2) {
+                            state.isResizing = true;
+                            state.resizeHandle = handle;
+                            state.lastX = x;
+                            state.lastY = y;
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Check if an element (image or text) is clicked (for dragging)
+            for (let i = drawnElements.length - 1; i >= 0; i--) {
+                const el = drawnElements[i];
+                if (el.type === 'image' && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height) {
+                    state.isDraggingElement = true;
+                    state.selectedElementId = el.id;
+                    state.dragOffsetX = x - el.x;
+                    state.dragOffsetY = y - el.y;
+                    redrawAllElements(); // Redraw to show handles
+                    return;
+                } else if (el.type === 'text') {
+                    // For text, we need to calculate its bounding box
+                    ctx.font = `${el.fontSize} ${el.fontFamily}`;
+                    const textMetrics = ctx.measureText(el.text);
+                    const textWidth = textMetrics.width;
+                    // For multi-line text, approximate height
+                    const textHeight = parseInt(el.fontSize) * 1.2 * el.text.split('\n').length;
+
+                    // Check if click is within text bounding box
+                    // Note: text y is baseline, so check from y - textHeight to y
+                    if (x >= el.x && x <= el.x + textWidth && y >= el.y - textHeight && y <= el.y) {
+                        state.isDraggingElement = true;
+                        state.selectedElementId = el.id;
+                        state.dragOffsetX = x - el.x;
+                        state.dragOffsetY = y - el.y;
+                        redrawAllElements();
+                        return;
+                    }
+                }
+            }
+            state.selectedElementId = null; // Deselect if no element clicked
+            redrawAllElements(); // Redraw to hide handles
+            return; // Exit if select tool is active and no element was selected for dragging/resizing
+        }
+
         if (state.tool === 'text') {
             state.isTyping = true;
             const inputX = x;
@@ -182,19 +245,18 @@ document.addEventListener('DOMContentLoaded', () => {
         state.lastX = x;
         state.lastY = y;
 
-        if (state.tool !== 'select') {
-            const drawData = {
-                type: 'start',
-                x: x,
-                y: y,
-                tool: state.tool,
-                strokeColor: state.strokeColor,
-                strokeWidth: state.tool === 'eraser' ? 20 : 5
-            };
-            currentPath = [drawData];
-            socket.emit('drawing', drawData);
-            drawOnCanvas(drawData);
-        }
+        // If we reach here, it means it's a drawing tool (pen or eraser)
+        const drawData = {
+            type: 'start',
+            x: x,
+            y: y,
+            tool: state.tool,
+            strokeColor: state.strokeColor,
+            strokeWidth: state.tool === 'eraser' ? 20 : 5
+        };
+        currentPath = [drawData];
+        socket.emit('drawing', drawData);
+        drawOnCanvas(drawData);
     };
 
     const draw = (e) => {
@@ -202,40 +264,40 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
-        if (state.isResizing && state.selectedImageId !== null) {
-            const imageToResize = drawnElements.find(el => el.id === state.selectedImageId);
-            if (imageToResize) {
+        if (state.isResizing && state.selectedElementId !== null) {
+            const elementToResize = drawnElements.find(el => el.id === state.selectedElementId);
+            if (elementToResize && elementToResize.type === 'image') {
                 const dx = x - state.lastX;
                 const dy = y - state.lastY;
 
                 switch (state.resizeHandle) {
                     case 'tl':
-                        imageToResize.x += dx;
-                        imageToResize.y += dy;
-                        imageToResize.width -= dx;
-                        imageToResize.height -= dy;
+                        elementToResize.x += dx;
+                        elementToResize.y += dy;
+                        elementToResize.width -= dx;
+                        elementToResize.height -= dy;
                         break;
                     case 'tr':
-                        imageToResize.y += dy;
-                        imageToResize.width += dx;
-                        imageToResize.height -= dy;
+                        elementToResize.y += dy;
+                        elementToResize.width += dx;
+                        elementToResize.height -= dy;
                         break;
                     case 'bl':
-                        imageToResize.x += dx;
-                        imageToResize.width -= dx;
-                        imageToResize.height += dy;
+                        elementToResize.x += dx;
+                        elementToResize.width -= dx;
+                        elementToResize.height += dy;
                         break;
                     case 'br':
-                        imageToResize.width += dx;
-                        imageToResize.height += dy;
+                        elementToResize.width += dx;
+                        elementToResize.height += dy;
                         break;
                 }
                 // Prevent negative width/height
-                imageToResize.width = Math.max(10, imageToResize.width);
-                imageToResize.height = Math.max(10, imageToResize.height);
+                elementToResize.width = Math.max(10, elementToResize.width);
+                elementToResize.height = Math.max(10, elementToResize.height);
 
                 redrawAllElements();
-                socket.emit('imageUpdate', { id: imageToResize.id, x: imageToResize.x, y: imageToResize.y, width: imageToResize.width, height: imageToResize.height });
+                socket.emit('elementUpdate', { id: elementToResize.id, x: elementToResize.x, y: elementToResize.y, width: elementToResize.width, height: elementToResize.height });
             }
             state.lastX = x;
             state.lastY = y;
@@ -331,6 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (el.type === 'image') {
                 ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
 
+                // Draw resize handles if this image is selected
                 // Draw resize handles if this image is selected
                 if (state.selectedElementId === el.id && el.type === 'image') {
                     const handleSize = 10;
@@ -444,5 +507,31 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('text', (textData) => {
         drawnElements.push(textData);
         redrawAllElements();
+    });
+
+    socket.on('initialState', (initialElements) => {
+        drawnElements = []; // Clear existing elements
+        const loadImagePromises = [];
+
+        initialElements.forEach(el => {
+            if (el.type === 'image') {
+                const img = new Image();
+                const promise = new Promise(resolve => {
+                    img.onload = () => {
+                        el.img = img; // Attach loaded image object
+                        drawnElements.push(el);
+                        resolve();
+                    };
+                });
+                img.src = el.dataURL;
+                loadImagePromises.push(promise);
+            } else {
+                drawnElements.push(el);
+            }
+        });
+
+        Promise.all(loadImagePromises).then(() => {
+            redrawAllElements();
+        });
     });
 });
