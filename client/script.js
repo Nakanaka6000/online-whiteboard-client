@@ -32,6 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.classList.add('active');
             state.tool = e.target.id === 'pen-btn' ? 'pen' : 'eraser';
         }
+        if (e.target.classList.contains('color-btn')) {
+            document.querySelector('.color-btn.active').classList.remove('active');
+            e.target.classList.add('active');
+            state.strokeColor = e.target.dataset.color;
+        }
     });
 
     // --- Drawing logic ---
@@ -59,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
             x: x,
             y: y,
             tool: state.tool,
+            strokeColor: state.strokeColor,
             strokeWidth: state.tool === 'eraser' ? 20 : 5
         };
         socket.emit('drawing', drawData);
@@ -77,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lastX: state.lastX,
             lastY: state.lastY,
             tool: state.tool,
+            strokeColor: state.strokeColor,
             strokeWidth: state.tool === 'eraser' ? 20 : 5
         };
         socket.emit('drawing', drawData);
@@ -103,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.beginPath();
                 ctx.moveTo(data.lastX, data.lastY);
                 ctx.lineTo(data.x, data.y);
-                ctx.strokeStyle = data.tool === 'eraser' ? '#FFFFFF' : 'black';
+                ctx.strokeStyle = data.tool === 'eraser' ? '#FFFFFF' : data.strokeColor;
                 ctx.lineWidth = data.strokeWidth;
                 ctx.stroke();
                 break;
