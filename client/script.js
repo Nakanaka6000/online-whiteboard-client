@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const toolbar = document.getElementById('toolbar');
     const statusLight = document.getElementById('status-light');
+    const imageUploadBtn = document.getElementById('image-upload-btn');
+    const imageInput = document.getElementById('image-input');
 
     // Canvas setup
     canvas.width = window.innerWidth;
@@ -27,6 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.emit('clear');
             return;
         }
+        if (e.target.id === 'image-upload-btn') {
+            imageInput.click(); // Hidden file input
+            return;
+        }
         if (e.target.classList.contains('tool')) {
             document.querySelector('.tool.active').classList.remove('active');
             e.target.classList.add('active');
@@ -37,6 +43,45 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.classList.add('active');
             state.strokeColor = e.target.dataset.color;
         }
+    });
+
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                // Initial draw: center the image, scale down if too large
+                const maxWidth = canvas.width * 0.8;
+                const maxHeight = canvas.height * 0.8;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+
+                const x = (canvas.width - width) / 2;
+                const y = (canvas.height - height) / 2;
+
+                ctx.drawImage(img, x, y, width, height);
+
+                // Emit image data to other clients
+                socket.emit('image', {
+                    dataURL: event.target.result,
+                    x: x,
+                    y: y,
+                    width: width,
+                    height: height
+                });
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
     });
 
     // --- Drawing logic ---
@@ -156,5 +201,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.on('clear', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    socket.on('image', (imageData) => {
+        const img = new Image();
+        img.onload = () => {
+            ctx.drawImage(img, imageData.x, imageData.y, imageData.width, imageData.height);
+        };
+        img.src = imageData.dataURL;
     });
 });

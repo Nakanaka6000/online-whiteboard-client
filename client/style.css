@@ -37,7 +37,7 @@ body {
     border-color: #a0c4ff;
 }
 
-.tool, #clear-btn {
+.tool, #clear-btn, #image-upload-btn {
     padding: 8px 12px;
     border: 1px solid #ccc;
     background: #fff;
