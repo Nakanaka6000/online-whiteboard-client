@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = {
         isDrawing: false,
         isDraggingImage: false,
+        isResizing: false,
+        resizeHandle: null, // 'tl', 'tr', 'bl', 'br'
         selectedImageId: null,
         dragOffsetX: 0,
         dragOffsetY: 0,
@@ -120,7 +122,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const { x, y } = getMousePos(e);
 
         if (state.tool === 'select') {
-            // Check if an image is clicked
+            // Check if a resize handle is clicked
+            if (state.selectedImageId) {
+                const selectedImage = drawnElements.find(el => el.id === state.selectedImageId);
+                if (selectedImage) {
+                    const handleSize = 10;
+                    const handles = {
+                        tl: { x: selectedImage.x, y: selectedImage.y },
+                        tr: { x: selectedImage.x + selectedImage.width, y: selectedImage.y },
+                        bl: { x: selectedImage.x, y: selectedImage.y + selectedImage.height },
+                        br: { x: selectedImage.x + selectedImage.width, y: selectedImage.y + selectedImage.height }
+                    };
+
+                    for (const handle in handles) {
+                        const hx = handles[handle].x;
+                        const hy = handles[handle].y;
+                        if (x >= hx - handleSize / 2 && x <= hx + handleSize / 2 &&
+                            y >= hy - handleSize / 2 && y <= hy + handleSize / 2) {
+                            state.isResizing = true;
+                            state.resizeHandle = handle;
+                            state.lastX = x;
+                            state.lastY = y;
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Check if an image is clicked (for dragging)
             for (let i = drawnElements.length - 1; i >= 0; i--) {
                 const el = drawnElements[i];
                 if (el.type === 'image' && x >= el.x && x <= el.x + el.width && y >= el.y && y <= el.y + el.height) {
@@ -128,10 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.selectedImageId = el.id;
                     state.dragOffsetX = x - el.x;
                     state.dragOffsetY = y - el.y;
+                    redrawAllElements(); // Redraw to show handles
                     return;
                 }
             }
             state.selectedImageId = null; // Deselect if no image clicked
+            redrawAllElements(); // Redraw to hide handles
         }
 
         state.isDrawing = true;
@@ -154,9 +185,49 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const draw = (e) => {
-        if (!state.isDrawing && !state.isDraggingImage) return;
+        if (!state.isDrawing && !state.isDraggingImage && !state.isResizing) return;
         e.preventDefault();
         const { x, y } = getMousePos(e);
+
+        if (state.isResizing && state.selectedImageId !== null) {
+            const imageToResize = drawnElements.find(el => el.id === state.selectedImageId);
+            if (imageToResize) {
+                const dx = x - state.lastX;
+                const dy = y - state.lastY;
+
+                switch (state.resizeHandle) {
+                    case 'tl':
+                        imageToResize.x += dx;
+                        imageToResize.y += dy;
+                        imageToResize.width -= dx;
+                        imageToResize.height -= dy;
+                        break;
+                    case 'tr':
+                        imageToResize.y += dy;
+                        imageToResize.width += dx;
+                        imageToResize.height -= dy;
+                        break;
+                    case 'bl':
+                        imageToResize.x += dx;
+                        imageToResize.width -= dx;
+                        imageToResize.height += dy;
+                        break;
+                    case 'br':
+                        imageToResize.width += dx;
+                        imageToResize.height += dy;
+                        break;
+                }
+                // Prevent negative width/height
+                imageToResize.width = Math.max(10, imageToResize.width);
+                imageToResize.height = Math.max(10, imageToResize.height);
+
+                redrawAllElements();
+                socket.emit('imageUpdate', { id: imageToResize.id, x: imageToResize.x, y: imageToResize.y, width: imageToResize.width, height: imageToResize.height });
+            }
+            state.lastX = x;
+            state.lastY = y;
+            return;
+        }
 
         if (state.isDraggingImage && state.selectedImageId !== null) {
             const imageToMove = drawnElements.find(el => el.id === state.selectedImageId);
@@ -201,8 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         state.isDrawing = false;
         state.isDraggingImage = false;
-        state.selectedImageId = null;
+        state.isResizing = false;
+        state.resizeHandle = null;
         currentPath = [];
+        redrawAllElements(); // Ensure handles are hidden after resize/drag
     };
 
     // --- Canvas drawing function ---
@@ -243,6 +316,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.stroke();
             } else if (el.type === 'image') {
                 ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
+
+                // Draw resize handles if this image is selected
+                if (state.selectedImageId === el.id) {
+                    const handleSize = 10;
+                    ctx.fillStyle = '#a0c4ff';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+
+                    // Top-left
+                    ctx.fillRect(el.x - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    // Top-right
+                    ctx.fillRect(el.x + el.width - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x + el.width - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    // Bottom-left
+                    ctx.fillRect(el.x - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    // Bottom-right
+                    ctx.fillRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                }
             }
         });
     };
@@ -316,6 +410,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (imageToUpdate) {
             imageToUpdate.x = updateData.x;
             imageToUpdate.y = updateData.y;
+            if (updateData.width !== undefined) imageToUpdate.width = updateData.width;
+            if (updateData.height !== undefined) imageToUpdate.height = updateData.height;
             redrawAllElements();
         }
     });
