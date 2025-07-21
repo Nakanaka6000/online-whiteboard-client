@@ -20,10 +20,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let state = {
         isDrawing: false,
-        isDraggingImage: false,
+        isDraggingElement: false,
         isResizing: false,
         resizeHandle: null, // 'tl', 'tr', 'bl', 'br'
-        selectedImageId: null,
+        selectedElementId: null,
         dragOffsetX: 0,
         dragOffsetY: 0,
         isTyping: false,
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lastY: 0,
         strokeColor: 'black',
         strokeWidth: 5,
-        tool: 'pen' // 'pen', 'eraser', or 'select' for image manipulation
+        tool: 'pen' // 'pen', 'eraser', 'text', or 'select' for element manipulation
     };
 
     // --- Tool selection ---
@@ -242,13 +242,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (state.isDraggingImage && state.selectedImageId !== null) {
-            const imageToMove = drawnElements.find(el => el.id === state.selectedImageId);
-            if (imageToMove) {
-                imageToMove.x = x - state.dragOffsetX;
-                imageToMove.y = y - state.dragOffsetY;
+        if (state.isDraggingElement && state.selectedElementId !== null) {
+            const selectedElement = drawnElements.find(el => el.id === state.selectedElementId);
+            if (selectedElement) {
+                selectedElement.x = x - state.dragOffsetX;
+                selectedElement.y = y - state.dragOffsetY;
                 redrawAllElements();
-                socket.emit('imageUpdate', { id: imageToMove.id, x: imageToMove.x, y: imageToMove.y });
+                socket.emit('elementUpdate', { id: selectedElement.id, x: selectedElement.x, y: selectedElement.y });
             }
             return;
         }
@@ -284,9 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
             drawOnCanvas(drawData);
         }
         state.isDrawing = false;
-        state.isDraggingImage = false;
+        state.isDraggingElement = false;
         state.isResizing = false;
         state.resizeHandle = null;
+        state.selectedElementId = null;
         currentPath = [];
         redrawAllElements(); // Ensure handles are hidden after resize/drag
     };
@@ -331,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
 
                 // Draw resize handles if this image is selected
-                if (state.selectedImageId === el.id) {
+                if (state.selectedElementId === el.id && el.type === 'image') {
                     const handleSize = 10;
                     ctx.fillStyle = '#a0c4ff';
                     ctx.strokeStyle = '#000';
@@ -429,13 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = imageData.dataURL;
     });
 
-    socket.on('imageUpdate', (updateData) => {
-        const imageToUpdate = drawnElements.find(el => el.id === updateData.id);
-        if (imageToUpdate) {
-            imageToUpdate.x = updateData.x;
-            imageToUpdate.y = updateData.y;
-            if (updateData.width !== undefined) imageToUpdate.width = updateData.width;
-            if (updateData.height !== undefined) imageToUpdate.height = updateData.height;
+    socket.on('elementUpdate', (updateData) => {
+        const elementToUpdate = drawnElements.find(el => el.id === updateData.id);
+        if (elementToUpdate) {
+            elementToUpdate.x = updateData.x;
+            elementToUpdate.y = updateData.y;
+            if (updateData.width !== undefined) elementToUpdate.width = updateData.width;
+            if (updateData.height !== undefined) elementToUpdate.height = updateData.height;
             redrawAllElements();
         }
     });
