@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (state.isResizing && state.selectedElementId !== null) {
             const elementToResize = drawnElements.find(el => el.id === state.selectedElementId);
-            if (elementToResize && elementToResize.type === 'image') {
+            if (elementToResize && elementToResize.type === 'image') { // Ensure it's an image
                 const dx = x - state.lastX;
                 const dy = y - state.lastY;
 
