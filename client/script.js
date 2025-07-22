@@ -355,6 +355,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Canvas drawing function ---
     const drawOnCanvas = (data) => {
+        const originalCompositeOperation = ctx.globalCompositeOperation;
+        if (data.tool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+        }
+
         switch (data.type) {
             case 'start':
                 ctx.beginPath();
@@ -364,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.beginPath();
                 ctx.moveTo(data.lastX, data.lastY);
                 ctx.lineTo(data.x, data.y);
-                ctx.strokeStyle = data.tool === 'eraser' ? '#FFFFFF' : data.strokeColor;
+                ctx.strokeStyle = data.tool === 'eraser' ? 'rgba(0,0,0,1)' : data.strokeColor; // Eraser draws transparent
                 ctx.lineWidth = data.strokeWidth;
                 ctx.stroke();
                 break;
@@ -372,12 +377,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.closePath();
                 break;
         }
+        ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
     };
 
     const redrawAllElements = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawnElements.forEach(el => {
             if (el.type === 'path') {
+                const originalCompositeOperation = ctx.globalCompositeOperation;
+                if (el.tool === 'eraser') { // Assuming 'tool' property is stored with the path
+                    ctx.globalCompositeOperation = 'destination-out';
+                }
                 ctx.strokeStyle = el.strokeColor;
                 ctx.lineWidth = el.strokeWidth;
                 ctx.beginPath();
@@ -389,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
                 ctx.stroke();
+                ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
             } else if (el.type === 'image') {
                 ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
 
@@ -461,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (data.type === 'draw') {
             currentPath.push(data);
         } else if (data.type === 'stop') {
-            drawnElements.push({ type: 'path', path: currentPath, strokeColor: data.strokeColor, strokeWidth: data.strokeWidth });
+            drawnElements.push({ type: 'path', path: currentPath, strokeColor: data.strokeColor, strokeWidth: data.strokeWidth, tool: data.tool });
             currentPath = [];
         }
         redrawAllElements();
