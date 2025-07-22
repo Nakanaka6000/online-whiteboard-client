@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.selectedElementId) {
                 const selectedElement = drawnElements.find(el => el.id === state.selectedElementId);
                 if (selectedElement && selectedElement.type === 'image') {
-                    const handleSize = 10;
+                    const handleSize = 16;
                     const handles = {
                         tl: { x: selectedElement.x, y: selectedElement.y },
                         tr: { x: selectedElement.x + selectedElement.width, y: selectedElement.y },
@@ -349,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
         state.isDraggingElement = false;
         state.isResizing = false;
         state.resizeHandle = null;
-        state.selectedElementId = null;
         currentPath = [];
         redrawAllElements(); // Ensure handles are hidden after resize/drag
     };
@@ -396,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Draw resize handles if this image is selected
                 // Draw resize handles if this image is selected
                 if (state.selectedElementId === el.id && el.type === 'image') {
-                    const handleSize = 10;
+                    const handleSize = 16;
                     ctx.fillStyle = '#a0c4ff';
                     ctx.strokeStyle = '#000';
                     ctx.lineWidth = 1;
