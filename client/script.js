@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const draw = (e) => {
-        if (!state.isDrawing && !state.isDraggingImage && !state.isResizing || state.isTyping) return;
+        if (!state.isDrawing && !state.isDraggingElement && !state.isResizing || state.isTyping) return;
         e.preventDefault();
         const { x, y } = getMousePos(e);
 
