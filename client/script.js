@@ -489,7 +489,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (data.type === 'draw') {
             currentPath.push(data);
         } else if (data.type === 'stop') {
-            drawnElements.push({ type: 'path', path: currentPath, strokeColor: data.strokeColor, strokeWidth: data.strokeWidth, tool: data.tool });
+            const startPoint = currentPath[0];
+            drawnElements.push({
+                type: 'path',
+                path: currentPath,
+                strokeColor: startPoint.strokeColor,
+                strokeWidth: startPoint.strokeWidth,
+                tool: startPoint.tool
+            });
             currentPath = [];
         }
         redrawAllElements();
