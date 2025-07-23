@@ -3,9 +3,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const canvas = document.getElementById('whiteboard');
     const ctx = canvas.getContext('2d');
-
-    const backgroundCanvas = document.createElement('canvas');
-    const backgroundCtx = backgroundCanvas.getContext('2d');
+    const toolbar = document.getElementById('toolbar');
+    const statusLight = document.getElementById('status-light');
+    const imageUploadBtn = document.getElementById('image-upload-btn');
+    const imageInput = document.getElementById('image-input');
+    const textBtn = document.getElementById('text-btn');
 
     let drawnElements = []; // Stores all drawn lines and images
     let currentPath = []; // Stores points for the current drawing path
@@ -13,13 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Canvas setup
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    backgroundCanvas.width = window.innerWidth;
-    backgroundCanvas.height = window.innerHeight;
-
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    backgroundCtx.lineJoin = 'round';
-    backgroundCtx.lineCap = 'round';
 
     let state = {
         isDrawing: false,
@@ -166,12 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 } else if (el.type === 'text') {
                     // For text, we need to calculate its bounding box
-                    backgroundCtx.font = `${el.fontSize} ${el.fontFamily}`;
-                    const textMetrics = backgroundCtx.measureText(el.text);
+                    ctx.font = `${el.fontSize} ${el.fontFamily}`;
+                    const textMetrics = ctx.measureText(el.text);
                     const textWidth = textMetrics.width;
                     // For multi-line text, approximate height
-                    const textHeight = parseInt(el.fontSize) * 1.2 * el.text.split('
-').length;
+                    const textHeight = parseInt(el.fontSize) * 1.2 * el.text.split('\n').length;
 
                     // Check if click is within text bounding box
                     // Note: text y is baseline, so check from y - textHeight to y
@@ -255,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
             x: x,
             y: y,
             tool: state.tool,
-            strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor,
+            strokeColor: state.strokeColor,
             strokeWidth: state.tool === 'eraser' ? 20 : 5
         };
         currentPath = [drawData];
@@ -329,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastX: state.lastX,
                 lastY: state.lastY,
                 tool: state.tool,
-                strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor,
+                strokeColor: state.strokeColor,
                 strokeWidth: state.tool === 'eraser' ? 20 : 5
             };
             currentPath.push(drawData);
@@ -345,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isDrawing && state.tool !== 'select') {
             const drawData = { type: 'stop' };
             currentPath.push(drawData);
-            drawnElements.push({ type: 'path', path: currentPath, strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor, strokeWidth: state.tool === 'eraser' ? 20 : 5, tool: state.tool });
+            drawnElements.push({ type: 'path', path: currentPath, strokeColor: state.strokeColor, strokeWidth: state.tool === 'eraser' ? 20 : 5 });
             socket.emit('drawing', drawData);
             drawOnCanvas(drawData);
         }
@@ -359,87 +355,104 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Canvas drawing function ---
     const drawOnCanvas = (data) => {
-        const targetCtx = backgroundCtx; // Always draw to backgroundCtx
+        const originalCompositeOperation = ctx.globalCompositeOperation;
+        if (data.tool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+        }
 
         switch (data.type) {
             case 'start':
-                targetCtx.beginPath();
-                targetCtx.moveTo(data.x, data.y);
+                ctx.beginPath();
+                ctx.moveTo(data.x, data.y);
                 break;
             case 'draw':
-                targetCtx.beginPath();
-                targetCtx.moveTo(data.lastX, data.lastY);
-                targetCtx.lineTo(data.x, data.y);
-                targetCtx.strokeStyle = data.strokeColor;
-                targetCtx.lineWidth = data.strokeWidth;
-                targetCtx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(data.lastX, data.lastY);
+                ctx.lineTo(data.x, data.y);
+                ctx.strokeStyle = data.tool === 'eraser' ? 'rgba(0,0,0,1)' : data.strokeColor; // Eraser draws transparent
+                ctx.lineWidth = data.strokeWidth;
+                ctx.stroke();
                 break;
             case 'stop':
-                targetCtx.closePath();
+                ctx.closePath();
                 break;
         }
+        ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
     };
 
     const redrawAllElements = () => {
-        // Clear background canvas
-        backgroundCtx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw all elements onto the background canvas
-        drawnElements.forEach(el => {
+        const nonEraserElements = drawnElements.filter(el => !(el.type === 'path' && el.tool === 'eraser'));
+        const eraserElements = drawnElements.filter(el => el.type === 'path' && el.tool === 'eraser');
+
+        // Draw non-eraser elements first
+        nonEraserElements.forEach(el => {
             if (el.type === 'path') {
-                backgroundCtx.strokeStyle = el.strokeColor;
-                backgroundCtx.lineWidth = el.strokeWidth;
-                backgroundCtx.beginPath();
+                ctx.strokeStyle = el.strokeColor;
+                ctx.lineWidth = el.strokeWidth;
+                ctx.beginPath();
                 el.path.forEach((point, index) => {
                     if (point.type === 'start') {
-                        backgroundCtx.moveTo(point.x, point.y);
+                        ctx.moveTo(point.x, point.y);
                     } else if (point.type === 'draw') {
-                        backgroundCtx.lineTo(point.x, point.y);
+                        ctx.lineTo(point.x, point.y);
                     }
                 });
-                backgroundCtx.stroke();
+                ctx.stroke();
             } else if (el.type === 'image') {
-                backgroundCtx.drawImage(el.img, el.x, el.y, el.width, el.height);
+                ctx.drawImage(el.img, el.x, el.y, el.width, el.height);
+
+                // Draw resize handles if this image is selected
+                if (state.selectedElementId === el.id && el.type === 'image') {
+                    const handleSize = 16;
+                    ctx.fillStyle = '#a0c4ff';
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 1;
+
+                    // Top-left
+                    ctx.fillRect(el.x - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    // Top-right
+                    ctx.fillRect(el.x + el.width - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x + el.width - handleSize / 2, el.y - handleSize / 2, handleSize, handleSize);
+                    // Bottom-left
+                    ctx.fillRect(el.x - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    // Bottom-right
+                    ctx.fillRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                    ctx.strokeRect(el.x + el.width - handleSize / 2, el.y + el.height - handleSize / 2, handleSize, handleSize);
+                }
             } else if (el.type === 'text') {
-                backgroundCtx.font = `${el.fontSize} ${el.fontFamily}`;
-                backgroundCtx.fillStyle = el.color;
-                const lines = el.text.split('
-');
+                ctx.font = `${el.fontSize} ${el.fontFamily}`;
+                ctx.fillStyle = el.color;
+                // Split text into lines and draw each line
+                const lines = el.text.split('\n');
                 let currentY = el.y;
                 for (const line of lines) {
-                    backgroundCtx.fillText(line, el.x, currentY);
+                    ctx.fillText(line, el.x, currentY);
                     currentY += parseInt(el.fontSize) * 1.2; // Line height
                 }
             }
         });
 
-        // Clear main canvas and draw background canvas onto it
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(backgroundCanvas, 0, 0);
-
-        // Draw selection handles on top of the main canvas
-        if (state.selectedElementId) {
-            const selectedElement = drawnElements.find(el => el.id === state.selectedElementId);
-            if (selectedElement && selectedElement.type === 'image') {
-                const handleSize = 16;
-                ctx.fillStyle = '#a0c4ff';
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 1;
-
-                // Top-left
-                ctx.fillRect(selectedElement.x - handleSize / 2, selectedElement.y - handleSize / 2, handleSize, handleSize);
-                ctx.strokeRect(selectedElement.x - handleSize / 2, selectedElement.y - handleSize / 2, handleSize, handleSize);
-                // Top-right
-                ctx.fillRect(selectedElement.x + selectedElement.width - handleSize / 2, selectedElement.y - handleSize / 2, handleSize, handleSize);
-                ctx.strokeRect(selectedElement.x + selectedElement.width - handleSize / 2, selectedElement.y - handleSize / 2, handleSize, handleSize);
-                // Bottom-left
-                ctx.fillRect(selectedElement.x - handleSize / 2, selectedElement.y + selectedElement.height - handleSize / 2, handleSize, handleSize);
-                ctx.strokeRect(selectedElement.x - handleSize / 2, selectedElement.y + selectedElement.height - handleSize / 2, handleSize, handleSize);
-                // Bottom-right
-                ctx.fillRect(selectedElement.x + selectedElement.width - handleSize / 2, selectedElement.y + selectedElement.height - handleSize / 2, handleSize, handleSize);
-                ctx.strokeRect(selectedElement.x + selectedElement.width - handleSize / 2, selectedElement.y + selectedElement.height - handleSize / 2, handleSize, handleSize);
-            }
-        }
+        // Draw eraser elements last
+        eraserElements.forEach(el => {
+            const originalCompositeOperation = ctx.globalCompositeOperation;
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.strokeStyle = 'rgba(0,0,0,1)'; // Eraser draws transparent
+            ctx.lineWidth = el.strokeWidth;
+            ctx.beginPath();
+            el.path.forEach((point, index) => {
+                if (point.type === 'start') {
+                    ctx.moveTo(point.x, point.y);
+                } else if (point.type === 'draw') {
+                    ctx.lineTo(point.x, point.y);
+                }
+            });
+            ctx.stroke();
+            ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
+        });
     };
 
     // --- Event Listeners ---
@@ -455,8 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        backgroundCanvas.width = window.innerWidth;
-        backgroundCanvas.height = window.innerHeight;
         redrawAllElements(); // Redraw all elements on resize
     });
 
@@ -485,6 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('clear', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawnElements = []; // Clear all elements
         redrawAllElements(); // Ensure canvas is truly clear and elements array is empty
     });
