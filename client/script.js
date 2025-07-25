@@ -232,10 +232,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.isTyping = false;
             });
 
+            let enterPressCount = 0; // Counter for consecutive Enter presses
             textArea.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    textArea.blur();
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevent default new line behavior for all Enter presses initially
+
+                    if (e.shiftKey) {
+                        // Shift + Enter: Confirm immediately
+                        textArea.blur();
+                        enterPressCount = 0; // Reset counter
+                    } else {
+                        // Regular Enter key press
+                        enterPressCount++;
+                        if (enterPressCount >= 2) {
+                            // Second consecutive Enter: Confirm
+                            textArea.blur();
+                            enterPressCount = 0; // Reset counter
+                        } else {
+                            // First Enter: Add a new line manually
+                            const start = textArea.selectionStart;
+                            const end = textArea.selectionEnd;
+                            const text = textArea.value;
+                            textArea.value = text.substring(0, start) + '\n' + text.substring(end);
+                            textArea.selectionStart = textArea.selectionEnd = start + 1;
+                        }
+                    }
+                } else {
+                    // Any other key press resets the consecutive Enter counter
+                    enterPressCount = 0;
                 }
             });
             return;
