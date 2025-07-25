@@ -233,14 +233,27 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             let enterPressCount = 0; // Counter for consecutive Enter presses
+            let isComposingEnded = false; // Flag to track if IME composition just ended
+
+            textArea.addEventListener('compositionend', () => {
+                isComposingEnded = true;
+            });
+
             textArea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
-                    // If IME is composing, do not interfere. Let the IME handle the Enter key.
+                    // If IME is actively composing, do not interfere. Let the IME handle the Enter key.
                     if (e.isComposing) {
                         return;
                     }
 
                     e.preventDefault(); // Prevent default new line behavior for all Enter presses initially (after IME check)
+
+                    // If it's the first Enter after IME composition ended, consume it without adding a newline
+                    if (isComposingEnded) {
+                        isComposingEnded = false; // Reset the flag
+                        enterPressCount = 1; // Treat this as the first Enter for the double-enter logic
+                        return; // Do not add a newline for this specific Enter
+                    }
 
                     if (e.shiftKey) {
                         // Shift + Enter: Confirm immediately
@@ -254,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             textArea.blur();
                             enterPressCount = 0; // Reset counter
                         } else {
-                            // First Enter: Add a new line manually
+                            // First Enter (not after IME composition end): Add a new line manually
                             const start = textArea.selectionStart;
                             const end = textArea.selectionEnd;
                             const text = textArea.value;
@@ -263,8 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 } else {
-                    // Any other key press resets the consecutive Enter counter
+                    // Any other key press resets the consecutive Enter counter and IME composition end flag
                     enterPressCount = 0;
+                    isComposingEnded = false;
                 }
             });
             return;
