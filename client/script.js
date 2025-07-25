@@ -235,7 +235,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let enterPressCount = 0; // Counter for consecutive Enter presses
             textArea.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevent default new line behavior for all Enter presses initially
+                    // If IME is composing, do not interfere. Let the IME handle the Enter key.
+                    if (e.isComposing) {
+                        return;
+                    }
+
+                    e.preventDefault(); // Prevent default new line behavior for all Enter presses initially (after IME check)
 
                     if (e.shiftKey) {
                         // Shift + Enter: Confirm immediately
