@@ -593,6 +593,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 img.src = el.dataURL;
                 loadImagePromises.push(promise);
+            } else if (el.type === 'path') {
+                // Ensure strokeColor, strokeWidth, and tool are set for paths from initial state
+                if (el.path && el.path.length > 0) {
+                    const startPoint = el.path[0];
+                    el.strokeColor = startPoint.tool === 'eraser' ? '#ffffff' : startPoint.strokeColor;
+                    el.strokeWidth = startPoint.strokeWidth;
+                    el.tool = startPoint.tool;
+                }
+                drawnElements.push(el);
             } else {
                 drawnElements.push(el);
             }
