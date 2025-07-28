@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
             x: x,
             y: y,
             tool: state.tool,
-            strokeColor: state.strokeColor,
+            strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor, // Set to white for eraser
             strokeWidth: state.tool === 'eraser' ? 20 : 5
         };
         currentPath = [drawData];
@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastX: state.lastX,
                 lastY: state.lastY,
                 tool: state.tool,
-                strokeColor: state.strokeColor,
+                strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor, // Set to white for eraser
                 strokeWidth: state.tool === 'eraser' ? 20 : 5
             };
             currentPath.push(drawData);
@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.isDrawing && state.tool !== 'select') {
             const drawData = { type: 'stop' };
             currentPath.push(drawData);
-            drawnElements.push({ type: 'path', path: currentPath, strokeColor: state.strokeColor, strokeWidth: state.tool === 'eraser' ? 20 : 5 });
+            drawnElements.push({ type: 'path', path: currentPath, strokeColor: state.tool === 'eraser' ? '#ffffff' : state.strokeColor, strokeWidth: state.tool === 'eraser' ? 20 : 5, tool: state.tool });
             socket.emit('drawing', drawData);
             drawOnCanvas(drawData);
         }
@@ -398,11 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Canvas drawing function ---
     const drawOnCanvas = (data) => {
-        const originalCompositeOperation = ctx.globalCompositeOperation;
-        if (data.tool === 'eraser') {
-            ctx.globalCompositeOperation = 'destination-out';
-        }
-
         switch (data.type) {
             case 'start':
                 ctx.beginPath();
@@ -412,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.beginPath();
                 ctx.moveTo(data.lastX, data.lastY);
                 ctx.lineTo(data.x, data.y);
-                ctx.strokeStyle = data.tool === 'eraser' ? 'rgba(0,0,0,1)' : data.strokeColor; // Eraser draws transparent
+                ctx.strokeStyle = data.strokeColor;
                 ctx.lineWidth = data.strokeWidth;
                 ctx.stroke();
                 break;
@@ -420,7 +415,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.closePath();
                 break;
         }
-        ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
     };
 
     const redrawAllElements = () => {
@@ -481,9 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Draw eraser elements last
         eraserElements.forEach(el => {
-            const originalCompositeOperation = ctx.globalCompositeOperation;
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.strokeStyle = 'rgba(0,0,0,1)'; // Eraser draws transparent
+            ctx.strokeStyle = el.strokeColor;
             ctx.lineWidth = el.strokeWidth;
             ctx.beginPath();
             el.path.forEach((point, index) => {
@@ -494,7 +486,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             ctx.stroke();
-            ctx.globalCompositeOperation = originalCompositeOperation; // Reset to default
         });
     };
 
@@ -536,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawnElements.push({
                 type: 'path',
                 path: currentPath,
-                strokeColor: startPoint.strokeColor,
+                strokeColor: startPoint.tool === 'eraser' ? '#ffffff' : startPoint.strokeColor,
                 strokeWidth: startPoint.strokeWidth,
                 tool: startPoint.tool
             });
